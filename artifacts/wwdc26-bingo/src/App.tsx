@@ -6,14 +6,14 @@ import bingoSrc from "@assets/image_1780852856694.png";
 const IMG_W = 1514;
 const IMG_H = 1834;
 
-// Approximate pixel coordinates (top-left corner of each cell in the original image)
-// Header: ~21% of height = ~385px
-// 5 rows × (264px cell + 8px gap) = 1360px
-// Side padding: ~38px, 5 cols × (280px cell + 8px gap) = 1432px
-const COL_X = [38, 326, 614, 902, 1190] as const;   // left edge of each column
-const ROW_Y = [383, 655, 927, 1199, 1471] as const;  // top edge of each row
-const CELL_W = 280;  // cell width in original pixels
-const CELL_H = 264;  // cell height in original pixels
+// Pixel coordinates derived from brightness-based column/row separator scan:
+// col gaps at ~318-332, 606-620, 893-907, 1180-1194 → gap width ~14px
+// row dark band header ends at 332 → row 0 starts at 332
+// row gap 3→4 detected at 1465-1478 → consistent with 273px rows + 14px gaps
+const COL_X = [46, 332, 620, 907, 1194] as const;   // left edge of each column
+const ROW_Y = [332, 619, 906, 1193, 1480] as const;  // top edge of each row
+const CELL_W = 272;  // cell width in original pixels
+const CELL_H = 273;  // cell height in original pixels
 
 // Shared image element (loaded once)
 let sharedImg: HTMLImageElement | null = null;
@@ -39,7 +39,7 @@ function useBingoImage() {
 }
 
 // Trim N px from all sides of each crop so rounded-corner borders don't bleed in
-const CROP_INSET = 5;
+const CROP_INSET = 3;
 
 // Canvas cell that draws the exact crop from the original bingo image
 function CellCanvas({ col, row }: { col: number; row: number }) {
@@ -55,6 +55,8 @@ function CellCanvas({ col, row }: { col: number; row: number }) {
     const sy = ROW_Y[row as 0|1|2|3|4] + CROP_INSET;
     const sw = CELL_W - CROP_INSET * 2;
     const sh = CELL_H - CROP_INSET * 2;
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.drawImage(img, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
   }, [img, col, row]);
