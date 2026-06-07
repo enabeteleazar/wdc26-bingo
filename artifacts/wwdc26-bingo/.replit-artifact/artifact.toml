@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "WWDC26 Bingo"
+version = "1.0.0"
+id = "artifacts/wwdc26-bingo"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 18359
+
+[services.development]
+run = "pnpm --filter @workspace/wwdc26-bingo run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/wwdc26-bingo", "run", "build" ]
+publicDir = "artifacts/wwdc26-bingo/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "18359"
+BASE_PATH = "/"
