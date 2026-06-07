@@ -38,6 +38,9 @@ function useBingoImage() {
   return ready ? sharedImg : null;
 }
 
+// Trim N px from all sides of each crop so rounded-corner borders don't bleed in
+const CROP_INSET = 5;
+
 // Canvas cell that draws the exact crop from the original bingo image
 function CellCanvas({ col, row }: { col: number; row: number }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -48,10 +51,12 @@ function CellCanvas({ col, row }: { col: number; row: number }) {
     if (!canvas || !img) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-    const sx = COL_X[col as 0|1|2|3|4];
-    const sy = ROW_Y[row as 0|1|2|3|4];
+    const sx = COL_X[col as 0|1|2|3|4] + CROP_INSET;
+    const sy = ROW_Y[row as 0|1|2|3|4] + CROP_INSET;
+    const sw = CELL_W - CROP_INSET * 2;
+    const sh = CELL_H - CROP_INSET * 2;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.drawImage(img, sx, sy, CELL_W, CELL_H, 0, 0, canvas.width, canvas.height);
+    ctx.drawImage(img, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
   }, [img, col, row]);
 
   useEffect(() => { draw(); }, [draw]);
@@ -266,7 +271,7 @@ export default function App() {
                 onClick={() => toggle(cell.id)}
                 className={`bingo-cell relative rounded-xl overflow-hidden ${isFree ? "free-cell" : ""} ${isWinning ? "win-cell" : ""}`}
                 style={{
-                  aspectRatio: "1",
+                  aspectRatio: `${CELL_W}/${CELL_H}`,
                   border: isWinning
                     ? "2px solid rgba(255,215,0,0.85)"
                     : "1px solid rgba(255,255,255,0.12)",
@@ -279,7 +284,7 @@ export default function App() {
                   <div
                     className="absolute inset-0"
                     style={{
-                      background: isChecked ? "rgba(0,0,0,0.1)" : "rgba(0,0,0,0.35)",
+                      background: isChecked ? "rgba(0,0,0,0.05)" : "rgba(0,0,0,0.22)",
                       transition: "background 0.2s ease",
                       zIndex: 2,
                     }}
