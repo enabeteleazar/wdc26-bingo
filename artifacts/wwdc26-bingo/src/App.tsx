@@ -1,309 +1,218 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
+import bingoSrc from "@assets/image_1780852856694.png";
+
+// Image natural size: 1514 x 1834
+// We let the user fine-tune via a debug overlay if needed.
+const IMG_W = 1514;
+const IMG_H = 1834;
+
+// Approximate pixel coordinates (top-left corner of each cell in the original image)
+// Header: ~21% of height = ~385px
+// 5 rows × (264px cell + 8px gap) = 1360px
+// Side padding: ~38px, 5 cols × (280px cell + 8px gap) = 1432px
+const COL_X = [38, 326, 614, 902, 1190] as const;   // left edge of each column
+const ROW_Y = [383, 655, 927, 1199, 1471] as const;  // top edge of each row
+const CELL_W = 280;  // cell width in original pixels
+const CELL_H = 264;  // cell height in original pixels
+
+// Shared image element (loaded once)
+let sharedImg: HTMLImageElement | null = null;
+const imgListeners: (() => void)[] = [];
+
+function loadSharedImage(src: string) {
+  if (sharedImg) return;
+  sharedImg = new Image();
+  sharedImg.onload = () => imgListeners.forEach(fn => fn());
+  sharedImg.src = src;
+}
+
+function useBingoImage() {
+  const [ready, setReady] = useState(sharedImg?.complete ?? false);
+  useEffect(() => {
+    if (sharedImg?.complete) { setReady(true); return; }
+    const cb = () => setReady(true);
+    imgListeners.push(cb);
+    loadSharedImage(bingoSrc);
+    return () => { const i = imgListeners.indexOf(cb); if (i >= 0) imgListeners.splice(i, 1); };
+  }, []);
+  return ready ? sharedImg : null;
+}
+
+// Canvas cell that draws the exact crop from the original bingo image
+function CellCanvas({ col, row }: { col: number; row: number }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const img = useBingoImage();
+
+  const draw = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || !img) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    const sx = COL_X[col as 0|1|2|3|4];
+    const sy = ROW_Y[row as 0|1|2|3|4];
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(img, sx, sy, CELL_W, CELL_H, 0, 0, canvas.width, canvas.height);
+  }, [img, col, row]);
+
+  useEffect(() => { draw(); }, [draw]);
+
+  // Redraw when canvas mounts or resizes
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ro = new ResizeObserver(() => {
+      canvas.width = canvas.offsetWidth * devicePixelRatio;
+      canvas.height = canvas.offsetHeight * devicePixelRatio;
+      draw();
+    });
+    ro.observe(canvas);
+    return () => ro.disconnect();
+  }, [draw]);
+
+  return (
+    <canvas
+      ref={canvasRef}
+      style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}
+    />
+  );
+}
 
 const BINGO_CELLS = [
-  {
-    id: 0,
-    label: "Next MacOS: MacOS Tiburon",
-    bg: "from-blue-400 via-green-300 to-blue-600",
-    emoji: "🏔️",
-  },
-  {
-    id: 1,
-    label: "Keynote Length: 105 Minutes (± 5)",
-    bg: "from-gray-700 to-gray-900",
-    emoji: "⏱️",
-    monospace: true,
-  },
-  {
-    id: 2,
-    label: "A Wallpaper Creator Feature Announced",
-    bg: "from-pink-500 via-purple-500 to-blue-500",
-    emoji: "🎨",
-  },
-  {
-    id: 3,
-    label: "M5 Mac mini & Mac Studios Announced",
-    bg: "from-gray-300 to-gray-500",
-    emoji: "🖥️",
-  },
-  {
-    id: 4,
-    label: "Pick your AI Provider",
-    bg: "from-indigo-600 via-purple-500 to-pink-400",
-    emoji: "✨",
-  },
-  {
-    id: 5,
-    label: "Apple Debuts an AirPods App",
-    bg: "from-white to-gray-200",
-    dark: false,
-    emoji: "🎧",
-  },
-  {
-    id: 6,
-    label: "Stephen Lemay Appears on Video",
-    bg: "from-gray-400 to-gray-600",
-    emoji: "🎬",
-  },
-  {
-    id: 7,
-    label: "OS 27 Features Updated Genmoji Creation",
-    bg: "from-yellow-300 via-orange-300 to-pink-400",
-    emoji: "😊",
-  },
-  {
-    id: 8,
-    label: "Apple Intelligence Shortcut Integration",
-    bg: "from-purple-700 to-indigo-800",
-    emoji: "🔮",
-  },
-  {
-    id: 9,
-    label: "Lil' Finder Guy Makes an Appearance",
-    bg: "from-blue-500 to-purple-600",
-    emoji: "🗂️",
-  },
-  {
-    id: 10,
-    label: "Apple Intelligence Health Integration",
-    bg: "from-pink-400 via-red-400 to-orange-400",
-    emoji: "❤️",
-  },
-  {
-    id: 11,
-    label: "A Memeable Federighi Moment",
-    bg: "from-gray-500 to-gray-700",
-    emoji: "😎",
-  },
-  {
-    id: 12,
-    label: '"Good Morning"\nFree Space',
-    bg: "from-orange-500 via-pink-500 to-purple-600",
-    emoji: "⭐",
-    freeSpace: true,
-  },
-  {
-    id: 13,
-    label: "Customizable Camera in iOS 27",
-    bg: "from-gray-800 to-gray-900",
-    emoji: "📷",
-  },
-  {
-    id: 14,
-    label: "A Siri Chat App is Announced",
-    bg: "from-gray-900 to-gray-800",
-    emoji: "💬",
-  },
-  {
-    id: 15,
-    label: "Apple Previews homeOS + Hardware",
-    bg: "from-gray-300 via-blue-100 to-gray-400",
-    dark: false,
-    emoji: "🏠",
-  },
-  {
-    id: 16,
-    label: "Daily Brief Feature",
-    bg: "from-white via-gray-100 to-blue-50",
-    dark: false,
-    emoji: "📋",
-  },
-  {
-    id: 17,
-    label: "A Secret Location is Accessed via Whimsical Transition",
-    bg: "from-gray-400 via-gray-300 to-gray-500",
-    emoji: "🌀",
-  },
-  {
-    id: 18,
-    label: "Liquid Glass Polish",
-    bg: "from-cyan-400 via-pink-400 to-yellow-400",
-    emoji: "💎",
-  },
-  {
-    id: 19,
-    label: "Apple Debuts a Gemini-Powered Siri",
-    bg: "from-indigo-500 via-purple-600 to-violet-700",
-    emoji: "🤖",
-  },
-  {
-    id: 20,
-    label: "More AI Editing Tools Come to Camera/Photos",
-    bg: "from-gray-100 to-gray-200",
-    dark: false,
-    emoji: "📸",
-  },
-  {
-    id: 21,
-    label: "John Ternus Appears During the Event",
-    bg: "from-gray-500 to-gray-700",
-    emoji: "👨‍💼",
-  },
-  {
-    id: 22,
-    label: "More Native Apple Vision Pro Apps",
-    bg: "from-red-500 via-purple-500 to-blue-500",
-    emoji: "📱",
-  },
-  {
-    id: 23,
-    label: "macOS/iOS 27 Emphasize Stability & Battery Life",
-    bg: "from-purple-600 via-pink-500 to-orange-400",
-    emoji: "🔋",
-  },
-  {
-    id: 24,
-    label: "Tim Cook Says GoodBye",
-    bg: "from-purple-900 via-pink-800 to-gray-900",
-    emoji: "👋",
-  },
+  { id: 0,  label: "Next MacOS:\nMacOS Tiburon" },
+  { id: 1,  label: "Keynote Length:\n105 Minutes (± 5)" },
+  { id: 2,  label: "A Wallpaper Creator\nFeature Announced" },
+  { id: 3,  label: "M5 Mac mini &\nMac Studios Announced" },
+  { id: 4,  label: "Pick your\nAI Provider" },
+  { id: 5,  label: "Apple Debuts an\nAirPods App" },
+  { id: 6,  label: "Stephen Lemay\nAppears on Video" },
+  { id: 7,  label: "OS 27 Features\nUpdated Genmoji Creation" },
+  { id: 8,  label: "Apple Intelligence\nShortcut Integration" },
+  { id: 9,  label: "Lil' Finder Guy\nMakes an Appearance" },
+  { id: 10, label: "Apple Intelligence\nHealth Integration" },
+  { id: 11, label: "A Memeable\nFederighi Moment" },
+  { id: 12, label: '"Good Morning"\nFree Space', freeSpace: true },
+  { id: 13, label: "Customizable\nCamera in iOS 27" },
+  { id: 14, label: "A Siri Chat App\nis Announced" },
+  { id: 15, label: "Apple Previews\nhomeOS + Hardware" },
+  { id: 16, label: "Daily Brief\nFeature" },
+  { id: 17, label: "A Secret Location is\nAccessed via\nWhimsical Transition" },
+  { id: 18, label: "Liquid Glass\nPolish" },
+  { id: 19, label: "Apple Debuts a\nGemini-Powered Siri" },
+  { id: 20, label: "More AI Editing Tools\nCome to Camera/Photos" },
+  { id: 21, label: "John Ternus Appears\nDuring the Event" },
+  { id: 22, label: "More Native Apple\nVision Pro Apps" },
+  { id: 23, label: "macOS/iOS 27\nEmphasize Stability\n& Battery Life" },
+  { id: 24, label: "Tim Cook\nSays GoodBye" },
 ];
 
 const WINNING_LINES = [
-  [0, 1, 2, 3, 4],
-  [5, 6, 7, 8, 9],
-  [10, 11, 12, 13, 14],
-  [15, 16, 17, 18, 19],
-  [20, 21, 22, 23, 24],
-  [0, 5, 10, 15, 20],
-  [1, 6, 11, 16, 21],
-  [2, 7, 12, 17, 22],
-  [3, 8, 13, 18, 23],
-  [4, 9, 14, 19, 24],
-  [0, 6, 12, 18, 24],
-  [4, 8, 12, 16, 20],
+  [0,1,2,3,4],[5,6,7,8,9],[10,11,12,13,14],[15,16,17,18,19],[20,21,22,23,24],
+  [0,5,10,15,20],[1,6,11,16,21],[2,7,12,17,22],[3,8,13,18,23],[4,9,14,19,24],
+  [0,6,12,18,24],[4,8,12,16,20],
 ];
 
-function checkBingo(checked: Set<number>): number[][] {
-  return WINNING_LINES.filter((line) => line.every((idx) => checked.has(idx)));
+function checkBingo(checked: Set<number>) {
+  return WINNING_LINES.filter(line => line.every(i => checked.has(i)));
 }
 
 export default function App() {
   const [checked, setChecked] = useState<Set<number>>(new Set([12]));
-  const [newBingoLines, setNewBingoLines] = useState<number[][]>([]);
-  const [showBannerFor, setShowBannerFor] = useState<number[][]>([]);
-  const [prevBingos, setPrevBingos] = useState<number>(0);
+  const [showBanner, setShowBanner] = useState(false);
+  const [prevBingoCount, setPrevBingoCount] = useState(0);
 
   const bingoLines = checkBingo(checked);
   const winningCells = new Set(bingoLines.flat());
 
   useEffect(() => {
-    const count = bingoLines.length;
-    if (count > prevBingos) {
-      const newLines = bingoLines.slice(prevBingos);
-      setNewBingoLines(newLines);
-      setShowBannerFor(newLines);
-      const timeout = setTimeout(() => setShowBannerFor([]), 3000);
-      setPrevBingos(count);
-      return () => clearTimeout(timeout);
+    if (bingoLines.length > prevBingoCount) {
+      setShowBanner(true);
+      setPrevBingoCount(bingoLines.length);
+      const t = setTimeout(() => setShowBanner(false), 3000);
+      return () => clearTimeout(t);
     }
   }, [bingoLines.length]);
 
   const toggle = (id: number) => {
     if (id === 12) return;
-    setChecked((prev) => {
+    setChecked(prev => {
       const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
+      next.has(id) ? next.delete(id) : next.add(id);
       return next;
     });
   };
 
   const reset = () => {
     setChecked(new Set([12]));
-    setPrevBingos(0);
-    setNewBingoLines([]);
-    setShowBannerFor([]);
+    setPrevBingoCount(0);
+    setShowBanner(false);
   };
 
   return (
     <div
-      className="min-h-screen flex flex-col items-center justify-center p-4"
+      className="min-h-screen flex flex-col items-center justify-center p-3"
       style={{
-        background: "radial-gradient(ellipse at top, #1a1a2e 0%, #0a0a14 60%, #000 100%)",
+        background: "radial-gradient(ellipse at top, #1c1c2e 0%, #0a0a14 60%, #000 100%)",
         fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif",
       }}
     >
-      {showBannerFor.length > 0 && (
+      <style>{`
+        @keyframes fadeInOut {
+          0%   { opacity: 0; transform: scale(0.7) rotate(-4deg); }
+          15%  { opacity: 1; transform: scale(1.05) rotate(1deg); }
+          25%  { transform: scale(1) rotate(0deg); }
+          80%  { opacity: 1; }
+          100% { opacity: 0; transform: scale(0.9); }
+        }
+        @keyframes checkPop {
+          0%   { transform: scale(0) rotate(-20deg); opacity: 0; }
+          60%  { transform: scale(1.25) rotate(5deg); opacity: 1; }
+          100% { transform: scale(1) rotate(0deg); opacity: 1; }
+        }
+        @keyframes winPulse {
+          0%,100% { box-shadow: 0 0 10px 2px rgba(255,215,0,0.5); }
+          50%      { box-shadow: 0 0 28px 6px rgba(255,215,0,0.9); }
+        }
+        .bingo-cell {
+          cursor: pointer;
+          transition: transform 0.13s ease;
+        }
+        .bingo-cell:hover { transform: scale(1.05); }
+        .bingo-cell:active { transform: scale(0.96); }
+        .free-cell { cursor: default !important; }
+        .free-cell:hover { transform: none !important; }
+        .win-cell { animation: winPulse 1.6s ease-in-out infinite; border: 2px solid rgba(255,215,0,0.85) !important; }
+      `}</style>
+
+      {showBanner && (
         <div
           className="fixed inset-0 flex items-center justify-center z-50 pointer-events-none"
           style={{ animation: "fadeInOut 3s forwards" }}
         >
           <div
-            className="text-center px-12 py-8 rounded-3xl"
+            className="px-14 py-8 rounded-3xl text-center"
             style={{
-              background: "linear-gradient(135deg, rgba(255,200,0,0.95), rgba(255,120,0,0.95))",
-              boxShadow: "0 0 80px rgba(255,180,0,0.6), 0 20px 60px rgba(0,0,0,0.5)",
-              animation: "popIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)",
+              background: "linear-gradient(135deg, #ffd700 0%, #ff6b00 100%)",
+              boxShadow: "0 0 80px rgba(255,180,0,0.7), 0 20px 60px rgba(0,0,0,0.6)",
             }}
           >
-            <div className="text-8xl font-black text-white tracking-tight" style={{ textShadow: "0 4px 20px rgba(0,0,0,0.3)" }}>
-              BINGO!
+            <div className="text-8xl font-black text-white" style={{ textShadow: "0 4px 20px rgba(0,0,0,0.3)" }}>
+              BINGO !
             </div>
-            <div className="text-white text-xl font-semibold mt-2 opacity-90">
-              {showBannerFor.length > 1 ? `${showBannerFor.length} lignes complétées !` : "Ligne complétée !"}
+            <div className="text-white text-xl font-semibold mt-1 opacity-90">
+              {bingoLines.length > 1 ? `${bingoLines.length} lignes complètes !` : "Ligne complète !"}
             </div>
           </div>
         </div>
       )}
 
-      <style>{`
-        @keyframes fadeInOut {
-          0% { opacity: 0; }
-          15% { opacity: 1; }
-          75% { opacity: 1; }
-          100% { opacity: 0; }
-        }
-        @keyframes popIn {
-          0% { transform: scale(0.3) rotate(-5deg); }
-          100% { transform: scale(1) rotate(0deg); }
-        }
-        @keyframes checkmark {
-          0% { transform: scale(0) rotate(-45deg); opacity: 0; }
-          60% { transform: scale(1.3) rotate(5deg); opacity: 1; }
-          100% { transform: scale(1) rotate(0deg); opacity: 1; }
-        }
-        @keyframes shimmer {
-          0% { background-position: -200% center; }
-          100% { background-position: 200% center; }
-        }
-        @keyframes pulseGlow {
-          0%, 100% { box-shadow: 0 0 15px rgba(255, 215, 0, 0.4); }
-          50% { box-shadow: 0 0 35px rgba(255, 215, 0, 0.9); }
-        }
-        .bingo-cell {
-          transition: transform 0.15s ease, box-shadow 0.15s ease;
-          cursor: pointer;
-        }
-        .bingo-cell:hover:not(.free-space) {
-          transform: scale(1.04);
-          box-shadow: 0 8px 25px rgba(0,0,0,0.5);
-        }
-        .bingo-cell:active:not(.free-space) {
-          transform: scale(0.97);
-        }
-        .winning-glow {
-          animation: pulseGlow 1.5s ease-in-out infinite;
-          border: 2px solid rgba(255, 215, 0, 0.8) !important;
-        }
-      `}</style>
-
-      <div className="w-full max-w-2xl">
-        <div className="text-center mb-6">
-          <div className="flex items-center justify-center gap-4 mb-1">
-            <div
-              className="w-12 h-12 rounded-full flex items-center justify-center text-2xl"
-              style={{ background: "rgba(255,255,255,0.15)" }}
-            >
-              🍎
-            </div>
+      <div className="w-full" style={{ maxWidth: 640 }}>
+        <div className="text-center mb-4 select-none">
+          <div className="flex items-center justify-center gap-3 mb-0.5">
+            <span className="text-3xl">🍎</span>
             <h1
-              className="text-6xl font-black tracking-tight text-white"
+              className="text-5xl font-black tracking-tight"
               style={{
-                background: "linear-gradient(135deg, #fff 0%, #a0c4ff 50%, #c3a6ff 100%)",
+                background: "linear-gradient(135deg, #fff 0%, #a8c8ff 50%, #d0aaff 100%)",
                 WebkitBackgroundClip: "text",
                 WebkitTextFillColor: "transparent",
               }}
@@ -312,9 +221,9 @@ export default function App() {
             </h1>
           </div>
           <p
-            className="text-2xl font-bold tracking-[0.3em] uppercase"
+            className="text-xl font-bold tracking-[0.35em] uppercase"
             style={{
-              background: "linear-gradient(90deg, #a0c4ff, #c3a6ff, #ffd6a5)",
+              background: "linear-gradient(90deg, #a8c8ff, #d0aaff, #ffd6a5)",
               WebkitBackgroundClip: "text",
               WebkitTextFillColor: "transparent",
             }}
@@ -324,7 +233,7 @@ export default function App() {
         </div>
 
         {bingoLines.length > 0 && (
-          <div className="text-center mb-4">
+          <div className="text-center mb-3">
             <span
               className="inline-block px-4 py-1.5 rounded-full text-sm font-bold text-black"
               style={{
@@ -338,52 +247,56 @@ export default function App() {
         )}
 
         <div
-          className="grid grid-cols-5 gap-1.5 p-3 rounded-2xl"
+          className="grid grid-cols-5 gap-1.5 p-2 rounded-2xl"
           style={{
-            background: "rgba(255,255,255,0.05)",
+            background: "rgba(255,255,255,0.04)",
             border: "1px solid rgba(255,255,255,0.1)",
-            backdropFilter: "blur(10px)",
           }}
         >
-          {BINGO_CELLS.map((cell) => {
+          {BINGO_CELLS.map(cell => {
+            const col = cell.id % 5;
+            const row = Math.floor(cell.id / 5);
             const isChecked = checked.has(cell.id);
             const isWinning = winningCells.has(cell.id);
-            const isFreeSpace = cell.freeSpace;
+            const isFree = cell.freeSpace;
 
             return (
               <div
                 key={cell.id}
                 onClick={() => toggle(cell.id)}
-                className={`bingo-cell relative rounded-xl overflow-hidden aspect-square flex flex-col items-center justify-center ${isFreeSpace ? "free-space" : ""} ${isWinning ? "winning-glow" : ""}`}
+                className={`bingo-cell relative rounded-xl overflow-hidden ${isFree ? "free-cell" : ""} ${isWinning ? "win-cell" : ""}`}
                 style={{
+                  aspectRatio: "1",
                   border: isWinning
-                    ? "2px solid rgba(255,215,0,0.8)"
+                    ? "2px solid rgba(255,215,0,0.85)"
                     : "1px solid rgba(255,255,255,0.12)",
-                  cursor: isFreeSpace ? "default" : "pointer",
                 }}
               >
-                <div
-                  className={`absolute inset-0 bg-gradient-to-br ${cell.bg}`}
-                  style={{ opacity: isChecked ? 1 : 0.85 }}
-                />
+                <CellCanvas col={col} row={row} />
 
-                {!isChecked && !isFreeSpace && (
+                {/* Dim unchecked cells */}
+                {!isFree && (
                   <div
                     className="absolute inset-0"
-                    style={{ background: "rgba(0,0,0,0.35)" }}
+                    style={{
+                      background: isChecked ? "rgba(0,0,0,0.1)" : "rgba(0,0,0,0.35)",
+                      transition: "background 0.2s ease",
+                      zIndex: 2,
+                    }}
                   />
                 )}
 
+                {/* Checkmark */}
                 {isChecked && (
                   <div
                     className="absolute inset-0 flex items-center justify-center"
-                    style={{ background: "rgba(0,0,0,0.25)", zIndex: 5 }}
+                    style={{ zIndex: 10 }}
                   >
                     <div
                       style={{
-                        animation: "checkmark 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards",
-                        fontSize: "clamp(28px, 5vw, 42px)",
-                        filter: "drop-shadow(0 2px 8px rgba(0,0,0,0.5))",
+                        fontSize: "clamp(24px, 4.2vw, 38px)",
+                        animation: "checkPop 0.4s cubic-bezier(0.175,0.885,0.32,1.275) forwards",
+                        filter: "drop-shadow(0 2px 6px rgba(0,0,0,0.6))",
                       }}
                     >
                       ✅
@@ -391,57 +304,35 @@ export default function App() {
                   </div>
                 )}
 
-                <div className="relative z-10 flex flex-col items-center gap-1 p-1.5 text-center">
-                  {isFreeSpace && (
-                    <div className="text-xs font-black text-yellow-300 uppercase tracking-widest leading-none mb-0.5">
-                      One Last
-                    </div>
-                  )}
-                  <p
-                    className="leading-tight font-semibold"
-                    style={{
-                      fontSize: "clamp(7px, 1.4vw, 11px)",
-                      color: cell.dark === false ? "#1a1a2e" : "white",
-                      textShadow:
-                        cell.dark === false
-                          ? "none"
-                          : "0 1px 4px rgba(0,0,0,0.8)",
-                      whiteSpace: cell.monospace ? "pre" : undefined,
-                      fontFamily: cell.monospace ? "monospace" : undefined,
-                    }}
-                  >
-                    {cell.label}
-                  </p>
-                </div>
               </div>
             );
           })}
         </div>
 
         <div
-          className="mt-3 mx-auto rounded-xl py-2 px-4 text-center"
+          className="mt-2.5 rounded-xl py-1.5 px-4 text-center"
           style={{
-            background: "rgba(255,255,255,0.08)",
-            border: "1px solid rgba(255,255,255,0.12)",
+            background: "rgba(255,255,255,0.07)",
+            border: "1px solid rgba(255,255,255,0.1)",
           }}
         >
-          <p className="text-xs font-medium" style={{ color: "rgba(255,255,255,0.7)" }}>
-            <span className="font-bold text-yellow-300">Instant BINGO:</span>{" "}
+          <p className="text-xs font-medium" style={{ color: "rgba(255,255,255,0.65)" }}>
+            <span className="font-bold text-yellow-300">Instant BINGO :</span>{" "}
             Apple Increases base iCloud Storage from 5GB
           </p>
         </div>
 
-        <div className="flex items-center justify-between mt-4">
-          <p className="text-xs" style={{ color: "rgba(255,255,255,0.4)" }}>
+        <div className="flex items-center justify-between mt-3 px-1">
+          <p className="text-xs select-none" style={{ color: "rgba(255,255,255,0.35)" }}>
             {checked.size - 1} case{checked.size - 1 !== 1 ? "s" : ""} cochée{checked.size - 1 !== 1 ? "s" : ""}
           </p>
           <button
             onClick={reset}
             className="text-xs px-3 py-1.5 rounded-lg font-medium transition-all hover:scale-105 active:scale-95"
             style={{
-              background: "rgba(255,255,255,0.1)",
-              color: "rgba(255,255,255,0.6)",
-              border: "1px solid rgba(255,255,255,0.15)",
+              background: "rgba(255,255,255,0.09)",
+              color: "rgba(255,255,255,0.55)",
+              border: "1px solid rgba(255,255,255,0.13)",
             }}
           >
             Réinitialiser
