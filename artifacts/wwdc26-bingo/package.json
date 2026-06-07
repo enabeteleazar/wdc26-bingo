@@ -73,5 +73,9 @@
     "vite": "catalog:",
     "wouter": "^3.3.5",
     "zod": "catalog:"
+  },
+  "packageManager": "pnpm@10.28.0",
+  "engines": {
+    "node": "22.x"
   }
 }
