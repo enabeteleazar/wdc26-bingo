@@ -137,7 +137,9 @@ export default function App() {
       const t = setTimeout(() => setShowBanner(false), 3000);
       return () => clearTimeout(t);
     }
-  }, [bingoLines.length]);
+
+    return undefined;
+  }, [bingoLines.length, prevBingoCount]);
 
   const toggle = (id: number) => {
     if (id === 12) return;
